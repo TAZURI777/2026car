@@ -37,6 +37,17 @@
             tr.log-row.completed.is-editing > td { /* 수정 모드에서는 모든 셀을 다시 표시 */
                 display: flex;
             }
+            /* 접힌 행의 요약 정보 스타일 */
+            tr.log-row.completed:not(.expanded) .row-number {
+                justify-content: space-between; /* 요약 텍스트와 버튼을 양 끝으로 정렬 */
+            }
+            tr.log-row.completed:not(.expanded) .row-number span {
+                font-size: 14px; /* 폰트 크기 조정 */
+                font-weight: normal; /* 폰트 굵기 보통으로 */
+                white-space: nowrap; /* 한 줄로 표시 */
+                overflow: hidden; /* 넘치는 텍스트 숨김 */
+                text-overflow: ellipsis; /* 넘치는 텍스트 ... 처리 */
+            }
         }
 
         /* 데스크탑 화면 (테이블 뷰) */
@@ -88,7 +99,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260630_1</span></h1>
+        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260630_2</span></h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
             <div class="spinner"></div>
