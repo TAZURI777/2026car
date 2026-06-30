@@ -74,6 +74,7 @@
         }
         .edit-row-btn { background-color: #17a2b8; }
         .edit-row-btn.editing { background-color: #ffc107; color: black; }
+        .save-row-btn { background-color: #28a745; }
         .delete-row-btn { background-color: #dc3545; }
         .custom-file-upload { background-color: #007bff; transition: background-color 0.3s; padding: 10px 15px; font-size: 14px; border-radius: 8px; color: white;}
         .btn-disabled { background-color: #6c757d; cursor: not-allowed; }
@@ -99,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260630_2</span></h1>
+        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260630_3</span></h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
             <div class="spinner"></div>
@@ -329,12 +330,14 @@
             document.body.removeChild(link);
         });
         document.getElementById('reset-api-key-btn').addEventListener('click', () => {
-            localStorage.removeItem('kakaoApiKey');
-            localStorage.removeItem('googleApiKey');
-            localStorage.removeItem('selectedApiType');
-            currentApiType = null; // Reset global variable
-            alert('저장된 API 정보가 삭제되었습니다. API를 다시 선택하고 키를 입력해주세요.');
-            apiSelectModal.style.display = 'flex'; // API 선택 모달을 즉시 표시
+            if (confirm('정말로 모든 API 정보를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                localStorage.removeItem('kakaoApiKey');
+                localStorage.removeItem('googleApiKey');
+                localStorage.removeItem('selectedApiType');
+                currentApiType = null; // Reset global variable
+                alert('저장된 API 정보가 삭제되었습니다. API를 다시 선택하고 키를 입력해주세요.');
+                apiSelectModal.style.display = 'flex'; // API 선택 모달을 즉시 표시
+            }
         });
         document.getElementById('sort-by-date-btn').addEventListener('click', sortTableByDate);
         downloadExcelButton.addEventListener('click', downloadExcel);
@@ -365,6 +368,14 @@
             if (target.classList.contains('thumbnail')) {
                 modal.style.display = 'block';
                 modalImage.src = target.src;
+            } else if (target.classList.contains('save-row-btn')) {
+                saveTableData();
+                target.style.backgroundColor = '#218838';
+                target.textContent = '저장됨!';
+                setTimeout(() => {
+                    target.style.backgroundColor = '';
+                    target.textContent = '저장';
+                }, 1500);
             } else if (target.classList.contains('edit-row-btn')) {
                 toggleRowEditMode(row, target);
             } else if (target.classList.contains('delete-row-btn')) {
@@ -372,6 +383,7 @@
             } else if (target.classList.contains('toggle-btn') && row.classList.contains('completed')) {
                 row.classList.toggle('expanded');
                 target.textContent = row.classList.contains('expanded') ? '−' : '+';
+                updateRowNumbers();
                 saveTableData();
             }
         }
@@ -478,6 +490,7 @@
                         ? Math.round(endMileage - startMileage).toLocaleString() : '';
                 } else {
                     saveTableData();
+                    updateRowNumbers();
                 }
             }
         }
@@ -493,7 +506,6 @@
                 photoCell.innerHTML = '';
                 const thumbnail = document.createElement('img');
 thumbnail.src = compressedImageDataUrl;
-                thumbnail.src = compressedImageDataUrl;
                 thumbnail.className = 'thumbnail';
                 photoCell.appendChild(thumbnail);
                 photoCell.dataset.filename = currentCropInfo.file.name;
@@ -601,35 +613,6 @@ thumbnail.src = compressedImageDataUrl;
             }
         }
 
-        async function updateTableFromExif(exifData, type, row) {
-            let dateToUse;
-            if (exifData && exifData.dateTime) {
-                let formattedString = exifData.dateTime.replace(' ', 'T').replace(/:/g, (m, o) => o < 10 ? '-' : m);
-                dateToUse = new Date(formattedString);
-            } else {
-                dateToUse = new Date();
-            }
-            if (isNaN(dateToUse.getTime())) { dateToUse = new Date(); }
-            const year = dateToUse.getFullYear(), month = dateToUse.getMonth() + 1, day = dateToUse.getDate();
-            const displayDate = `${month}/${day}`, fullDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const formattedTime = `${String(dateToUse.getHours()).padStart(2, '0')}:${String(dateToUse.getMinutes()).padStart(2, '0')}`;
-            
-            if (type === 'start') {
-                const runDateCell = row.querySelector('.run-date');
-                runDateCell.textContent = displayDate;
-                runDateCell.dataset.fullDate = fullDate;
-                row.querySelector('.start-time').textContent = formattedTime;
-            } else {
-                row.querySelector('.end-time').textContent = formattedTime;
-            }
-            if (exifData && exifData.gpsLatitude && exifData.gpsLongitude) {
-                const address = await getAddressFromCoordinates(exifData.gpsLatitude, exifData.gpsLongitude);
-                row.querySelector(`.${type}-location`).textContent = address;
-            } else {
-                row.querySelector(`.${type}-location`).textContent = '위치 정보 없음';
-            }
-        }
-        
         function addNewRow(rowData = {}) {
             const newRow = document.createElement('tr');
             newRow.className = 'log-row';
@@ -654,18 +637,18 @@ thumbnail.src = compressedImageDataUrl;
                 <td class="row-number" data-label="No."><span></span><button class="toggle-btn" style="display: ${toggleBtnDisplay};">${toggleBtnText}</button></td>
                 <td data-label="출발촬영"><label for="${startInputId}" class="${startBtnClass}">📸 출발</label><input id="${startInputId}" class="photo-input" data-type="start" type="file" accept="image/*" capture="environment" ${isStartDisabled}></td>
                 <td data-label="도착촬영"><label for="${endInputId}" class="${endBtnClass}">📸 도착</label><input id="${endInputId}" class="photo-input" data-type="end" type="file" accept="image/*" capture="environment" ${isEndDisabled}></td>
-                <td class="run-date editable-cell" data-label="운행 일자" data-full-date="${rowData.fullDate || ''}">${rowData.displayDate || ''}</td>
-                <td class="start-location editable-cell" data-label="출발지">${rowData.startLocation || ''}</td>
-                <td class="end-location editable-cell" data-label="도착지">${rowData.endLocation || ''}</td>
-                <td class="start-time editable-cell" data-label="출발시간(H)">${rowData.startTime || ''}</td>
-                <td class="end-time editable-cell" data-label="도착시간(H)">${rowData.endTime || ''}</td>
+                <td class="run-date editable-cell" contenteditable="true" data-label="운행 일자" data-full-date="${rowData.fullDate || ''}">${rowData.displayDate || ''}</td>
+                <td class="start-location editable-cell" contenteditable="true" data-label="출발지">${rowData.startLocation || ''}</td>
+                <td class="end-location editable-cell" contenteditable="true" data-label="도착지">${rowData.endLocation || ''}</td>
+                <td class="start-time editable-cell" contenteditable="true" data-label="출발시간(H)">${rowData.startTime || ''}</td>
+                <td class="end-time editable-cell" contenteditable="true" data-label="도착시간(H)">${rowData.endTime || ''}</td>
                 <td class="mileage start-mileage" contenteditable="true" data-label="출발(km)">${rowData.startMileage || ''}</td>
                 <td class="mileage end-mileage" contenteditable="true" data-label="도착(km)">${rowData.endMileage || ''}</td>
                 <td class="distance" data-label="주행거리(km)">${rowData.distance || ''}</td>
                 <td contenteditable="true" data-label="비고">${rowData.remarks || ''}</td>
                 <td class="photo-cell start-photo-cell" data-label="출발사진" data-filename="${rowData.startPhotoFile || ''}" data-image-data-url="${rowData.startImageDataUrl || ''}">${startThumbHTML}</td>
                 <td class="photo-cell end-photo-cell" data-label="도착사진" data-filename="${rowData.endPhotoFile || ''}" data-image-data-url="${rowData.endImageDataUrl || ''}">${endThumbHTML}</td>
-                <td data-label="관리"><button class="action-btn edit-row-btn">수정</button><button class="action-btn delete-row-btn">삭제</button></td>
+                <td data-label="관리"><button class="action-btn save-row-btn">저장</button><button class="action-btn edit-row-btn">수정</button><button class="action-btn delete-row-btn">삭제</button></td>
             `;
             tableBody.appendChild(newRow);
         }
@@ -683,7 +666,18 @@ thumbnail.src = compressedImageDataUrl;
         function updateRowNumbers() {
             const rows = tableBody.querySelectorAll('.log-row');
             rows.forEach((row, index) => {
-                row.querySelector('.row-number span').textContent = index + 1;
+                const rowNumSpan = row.querySelector('.row-number span');
+                const rowNum = index + 1;
+
+                // 모바일 뷰에서 접혔을 때만 요약 정보 표시
+                if (window.innerWidth <= 900 && row.classList.contains('completed') && !row.classList.contains('expanded')) {
+                    const startLocation = row.querySelector('.start-location').textContent || '출발지';
+                    const endLocation = row.querySelector('.end-location').textContent || '도착지';
+                    const displayDate = row.querySelector('.run-date').textContent || '날짜';
+                    rowNumSpan.textContent = `No.${rowNum} ${startLocation}-${endLocation} ${displayDate}`;
+                } else {
+                    rowNumSpan.textContent = rowNum;
+                }
             });
         }
 
@@ -706,6 +700,7 @@ thumbnail.src = compressedImageDataUrl;
                     runDateCell.dataset.fullDate = `${yearGuess}-${month}-${day}`;
                 }
                 saveTableData();
+                updateRowNumbers();
             }
         }
 
