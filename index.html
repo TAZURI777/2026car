@@ -20,11 +20,26 @@
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; }
         .container { width: 100%; max-width: 1600px; background-color: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); box-sizing: border-box; margin: 10px auto; }
         h1 { text-align: center; color: #333; margin-bottom: 20px; font-size: 24px; }
-        .table-responsive-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; min-width: 1400px; table-layout: fixed; }
-        thead { display: table-header-group; }
-        tr { display: table-row; }
-        td, th { text-align: center; height: 85px; padding: 8px; border: 1px solid #ddd; vertical-align: middle; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+
+        /* 모바일 화면 (카드 뷰) */
+        @media screen and (max-width: 900px) {
+            table, thead, tbody, th, td, tr { display: block; }
+            thead tr { position: absolute; top: -9999px; left: -9999px; }
+            tr.log-row { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 15px; padding: 10px; }
+            td { border: none; border-bottom: 1px solid #eee; position: relative; padding-left: 50%; text-align: right; min-height: 44px; display: flex; align-items: center; justify-content: flex-end; }
+            td:before { content: attr(data-label); position: absolute; left: 10px; width: 45%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: bold; color: #333; }
+            td:last-child { border-bottom: 0; }
+        }
+
+        /* 데스크탑 화면 (테이블 뷰) */
+        @media screen and (min-width: 901px) {
+            table { table-layout: fixed; }
+            thead { display: table-header-group; }
+            tr { display: table-row; border: none; margin: 0; padding: 0; }
+            td, th { text-align: center; height: 85px; padding: 8px; border: 1px solid #ddd; vertical-align: middle; }
+            td:before { content: ""; display: none; }
+        }
 
         td[contenteditable="true"] { background-color: #e8f4ff; }
         .is-editing .editable-cell[contenteditable="true"] { background-color: #fffbe8; outline: 2px solid #ffc107; }
@@ -74,16 +89,14 @@
                 <div class="progress-bar"></div>
             </div>
         </div>
-        <div class="table-responsive-wrapper">
-            <table id="log-table">
-                <thead>
-                    <tr>
-                        <th>No.</th><th>출발촬영</th><th>도착촬영</th><th>운행 일자 <button id="sort-by-date-btn" class="sort-btn">↕</button></th><th>출발지</th><th>도착지</th><th>출발시간(H)</th><th>도착시간(H)</th><th>출발(km)</th><th>도착(km)</th><th>주행거리(km)</th><th>비고</th><th>출발사진</th><th>도착사진</th><th>관리</th>
-                    </tr>
-                </thead>
-                <tbody id="log-body"></tbody>
-            </table>
-        </div>
+        <table id="log-table">
+            <thead>
+                <tr>
+                    <th>No.</th><th>출발촬영</th><th>도착촬영</th><th>운행 일자 <button id="sort-by-date-btn" class="sort-btn">↕</button></th><th>출발지</th><th>도착지</th><th>출발시간(H)</th><th>도착시간(H)</th><th>출발(km)</th><th>도착(km)</th><th>주행거리(km)</th><th>비고</th><th>출발사진</th><th>도착사진</th><th>관리</th>
+                </tr>
+            </thead>
+            <tbody id="log-body"></tbody>
+        </table>
         <div class="main-buttons">
             <button id="add-row-btn" class="main-btn" style="grid-column: span 2;">행추가</button>
             <button id="download-excel" class="main-btn">엑셀 다운로드</button>
@@ -331,9 +344,7 @@
             const target = event.target;
             const row = target.closest('.log-row');
             if (!row) return;
-            if (target.classList.contains('custom-file-upload') && !target.classList.contains('btn-disabled')) {
-                target.nextElementSibling.click();
-            } else if (target.classList.contains('thumbnail')) {
+            if (target.classList.contains('thumbnail')) {
                 modal.style.display = 'block';
                 modalImage.src = target.src;
             } else if (target.classList.contains('edit-row-btn')) {
@@ -469,7 +480,9 @@ thumbnail.src = compressedImageDataUrl;
                 photoCell.appendChild(thumbnail);
                 photoCell.dataset.filename = currentCropInfo.file.name;
                 photoCell.dataset.imageDataUrl = compressedImageDataUrl;
-                row.querySelector(`input[data-type="${type}"]`).previousElementSibling.classList.add('btn-disabled');
+                const input = row.querySelector(`input[data-type="${type}"]`);
+                input.previousElementSibling.classList.add('btn-disabled'); // label 스타일 변경
+                input.disabled = true; // input 비활성화
 
                 const ocrPromise = recognizeMileage(croppedFile);
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR 시간 초과 (15초)')), 15000));
@@ -608,14 +621,21 @@ thumbnail.src = compressedImageDataUrl;
 
             const startBtnClass = rowData.startPhotoFile ? 'custom-file-upload btn-disabled' : 'custom-file-upload';
             const endBtnClass = rowData.endPhotoFile ? 'custom-file-upload btn-disabled' : 'custom-file-upload';
+            const isStartDisabled = rowData.startPhotoFile ? 'disabled' : '';
+            const isEndDisabled = rowData.endPhotoFile ? 'disabled' : '';
             const toggleBtnDisplay = rowData.completed === 'true' ? 'inline-block' : 'none';
             const toggleBtnText = rowData.expanded ? '−' : '+';
             const startThumbHTML = rowData.startImageDataUrl ? `<img src="${rowData.startImageDataUrl}" class="thumbnail">` : '';
             const endThumbHTML = rowData.endImageDataUrl ? `<img src="${rowData.endImageDataUrl}" class="thumbnail">` : '';
+            
+            const uniqueId = Date.now() + Math.random();
+            const startInputId = `start-photo-${uniqueId}`;
+            const endInputId = `end-photo-${uniqueId}`;
+
             newRow.innerHTML = `
                 <td class="row-number" data-label="No."><span></span><button class="toggle-btn" style="display: ${toggleBtnDisplay};">${toggleBtnText}</button></td>
-                <td data-label="출발촬영"><label class="${startBtnClass}">📸 출발</label><input class="photo-input" data-type="start" type="file" accept="image/*" capture="environment"></td>
-                <td data-label="도착촬영"><label class="${endBtnClass}">📸 도착</label><input class="photo-input" data-type="end" type="file" accept="image/*" capture="environment"></td>
+                <td data-label="출발촬영"><label for="${startInputId}" class="${startBtnClass}">📸 출발</label><input id="${startInputId}" class="photo-input" data-type="start" type="file" accept="image/*" capture="environment" ${isStartDisabled}></td>
+                <td data-label="도착촬영"><label for="${endInputId}" class="${endBtnClass}">📸 도착</label><input id="${endInputId}" class="photo-input" data-type="end" type="file" accept="image/*" capture="environment" ${isEndDisabled}></td>
                 <td class="run-date editable-cell" data-label="운행 일자" data-full-date="${rowData.fullDate || ''}">${rowData.displayDate || ''}</td>
                 <td class="start-location editable-cell" data-label="출발지">${rowData.startLocation || ''}</td>
                 <td class="end-location editable-cell" data-label="도착지">${rowData.endLocation || ''}</td>
