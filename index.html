@@ -30,6 +30,13 @@
             td { border: none; border-bottom: 1px solid #eee; position: relative; padding-left: 50%; text-align: right; min-height: 44px; display: flex; align-items: center; justify-content: flex-end; }
             td:before { content: attr(data-label); position: absolute; left: 10px; width: 45%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: bold; color: #333; }
             td:last-child { border-bottom: 0; }
+            /* 완료된 행 접기 기능 CSS */
+            tr.log-row.completed:not(.expanded) > td:not(:first-child) {
+                display: none;
+            }
+            tr.log-row.completed.is-editing > td { /* 수정 모드에서는 모든 셀을 다시 표시 */
+                display: flex;
+            }
         }
 
         /* 데스크탑 화면 (테이블 뷰) */
@@ -81,7 +88,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_20260630</span></h1>
+        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260630_1</span></h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
             <div class="spinner"></div>
