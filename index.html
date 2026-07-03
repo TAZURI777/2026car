@@ -100,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260630_3</span></h1>
+        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260703</span></h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
             <div class="spinner"></div>
@@ -391,8 +391,22 @@
         function handleFileChange(event) {
             const target = event.target;
             if (target.classList.contains('photo-input')) {
+                const row = target.closest('.log-row');
+                const type = target.dataset.type;
+                const photoCell = row.querySelector(`.photo-cell.${type}-photo-cell`);
+
+                // 이미 사진이 있는 경우, 재촬영 여부 확인
+                if (photoCell.dataset.imageDataUrl && photoCell.dataset.imageDataUrl !== 'null' && photoCell.dataset.imageDataUrl.startsWith('data:image')) {
+                    if (!confirm('이미 사진이 있습니다. 정말 다시 촬영하시겠습니까?')) {
+                        target.value = ''; // 파일 선택 취소
+                        return; // 사용자가 취소하면 함수 종료
+                    }
+                }
+
                 const file = target.files[0];
-                if (!file) return;
+                if (!file) {
+                    return;
+                }
 
                 currentCropInfo.row = target.closest('.log-row');
                 currentCropInfo.type = target.dataset.type;
@@ -509,10 +523,8 @@ thumbnail.src = compressedImageDataUrl;
                 thumbnail.className = 'thumbnail';
                 photoCell.appendChild(thumbnail);
                 photoCell.dataset.filename = currentCropInfo.file.name;
-                photoCell.dataset.imageDataUrl = compressedImageDataUrl;
-                const input = row.querySelector(`input[data-type="${type}"]`);
-                input.previousElementSibling.classList.add('btn-disabled'); // label 스타일 변경
-                input.disabled = true; // input 비활성화
+                photoCell.dataset.imageDataUrl = compressedImageDataUrl;                
+                // input을 비활성화하지 않아 재촬영이 가능하도록 수정합니다.
 
                 const ocrPromise = recognizeMileage(croppedFile);
                 const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR 시간 초과 (15초)')), 15000));
@@ -521,7 +533,9 @@ thumbnail.src = compressedImageDataUrl;
 
                 const mileageCell = row.querySelector(`.mileage.${type}-mileage`);
                 if (mileage) {
-                    mileageCell.textContent = mileage;
+                    const numericValue = mileage.replace(/\D/g, '');
+                    const formattedText = numericValue ? parseInt(numericValue, 10).toLocaleString('ko-KR') : '';
+                    mileageCell.textContent = formattedText;
                 } else {
                     alert('주행거리를 인식하지 못했습니다. 직접 입력해주세요.');
                     mileageCell.textContent = '';
@@ -795,19 +809,28 @@ thumbnail.src = compressedImageDataUrl;
                     const runDateCell = row.querySelector('.run-date');
                     const startPhotoCell = row.querySelector('.start-photo-cell');
                     const endPhotoCell = row.querySelector('.end-photo-cell');
-
+                    
+                    // 파일명으로 사용할 정보 추출 및 정제
+                    const sanitize = (str) => (str || '').replace(/[\s\\/:"*?<>|]+/g, '_').replace(/__/g, '_');
+                    const date = runDateCell.dataset.fullDate || '날짜없음';
+                    const startLoc = row.querySelector('.start-location').textContent || '출발지없음';
+                    const endLoc = row.querySelector('.end-location').textContent || '도착지없음';
+                    const baseFilename = `${date}_${sanitize(startLoc)}-${sanitize(endLoc)}`;
+                    
                     let startImageName = '';
                     if (startPhotoCell.dataset.imageDataUrl && startPhotoCell.dataset.imageDataUrl !== 'null' && startPhotoCell.dataset.imageDataUrl.startsWith('data:image')) {
-                        startImageName = `images/${rowNum}_start.jpg`;
+                        const filename = `${baseFilename}_start.jpg`;
+                        startImageName = `images/${filename}`;
                         const base64Data = startPhotoCell.dataset.imageDataUrl.split(',')[1];
-                        imgFolder.file(`${rowNum}_start.jpg`, base64Data, { base64: true });
+                        imgFolder.file(filename, base64Data, { base64: true });
                     }
 
                     let endImageName = '';
                     if (endPhotoCell.dataset.imageDataUrl && endPhotoCell.dataset.imageDataUrl !== 'null' && endPhotoCell.dataset.imageDataUrl.startsWith('data:image')) {
-                        endImageName = `images/${rowNum}_end.jpg`;
+                        const filename = `${baseFilename}_end.jpg`;
+                        endImageName = `images/${filename}`;
                         const base64Data = endPhotoCell.dataset.imageDataUrl.split(',')[1];
-                        imgFolder.file(`${rowNum}_end.jpg`, base64Data, { base64: true });
+                        imgFolder.file(filename, base64Data, { base64: true });
                     }
 
                     data.push({
@@ -893,58 +916,63 @@ thumbnail.src = compressedImageDataUrl;
             });
             canvas.width = image.width;
             canvas.height = image.height;
-            ctx.drawImage(image, 0, 0);
+            ctx.drawImage(image, 0, 0); // 캔버스에 이미지 그리기
             if (typeof imageSource !== 'string') URL.revokeObjectURL(image.src);
 
+            // 이미지 전처리: 그레이스케일 및 이진화 (인식률 개선)
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
+            let darkPixels = 0;
+            const totalPixels = data.length / 4;
+
             for (let i = 0; i < data.length; i += 4) {
-                const r = data[i], g = data[i+1], b = data[i+2];
-                const saturation = Math.max(r, g, b) - Math.min(r, g, b);
-                if (saturation > 50) { data[i] = data[i+1] = data[i+2] = 255; }
-                else { const brightness = (r+g+b)/3; data[i]=data[i+1]=data[i+2] = brightness < 128 ? 0 : 255; }
+                // 표준 휘도 공식(Luminosity method)을 사용하여 그레이스케일로 변환
+                const grayscale = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+                // 임계값을 기준으로 흑백 이진화
+                const threshold = 128;
+                const color = grayscale > threshold ? 255 : 0;
+                data[i] = data[i+1] = data[i+2] = color;
+                if (color === 0) darkPixels++;
+            }
+
+            // Tesseract는 흰 배경에 검은 글씨를 선호합니다.
+            // 만약 이미지의 50% 이상이 검은색이라면, 글씨가 흰색일 가능성이 높으므로 색상을 반전시킵니다.
+            if (darkPixels > totalPixels / 2) {
+                console.log("어두운 배경으로 판단되어 색상을 반전합니다.");
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = 255 - data[i];
+                    data[i+1] = 255 - data[i+1];
+                    data[i+2] = 255 - data[i+2];
+                }
             }
             ctx.putImageData(imageData, 0, 0);
 
             const worker = await Tesseract.createWorker('eng');
-    await worker.setParameters({
-        tessedit_char_whitelist: '0123456789', // 숫자만 인식하도록 제한
-        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE, // 이미지를 한 줄의 텍스트로 간주
-    });
+            await worker.setParameters({
+                tessedit_char_whitelist: '0123456789', // 숫자만 인식하도록 제한
+                // OSD(Orientation and Script Detection) 포함 모드로 변경하여 기울어진 이미지 인식률 향상
+                tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT_OSD,
+            });
 
             const parseText = (text) => {
                 console.log("OCR 원본:", text);
-        // whitelist 덕분에 출력이 훨씬 깨끗해지므로, 공백만 제거하고 가장 긴 숫자 시퀀스를 찾습니다.
-        const cleanedText = text.replace(/\s/g, '');
-        const numbers = cleanedText.match(/\d{4,}/g); // 4자리 이상의 숫자 시퀀스를 찾습니다.
-        if (!numbers) {
-            console.log("유효한 숫자를 찾지 못했습니다.");
-            return null;
-        }
-        // 찾은 숫자들 중 가장 긴 것을 주행거리로 간주합니다.
-        numbers.sort((a, b) => b.length - a.length);
+                const numbers = text.match(/\d+/g); // 텍스트에서 모든 숫자 그룹을 찾습니다.
+                if (!numbers || numbers.length === 0) {
+                    console.log("유효한 숫자를 찾지 못했습니다.");
+                    return null;
+                }
+                // 찾은 숫자 그룹 중 가장 긴 것을 주행거리로 간주합니다.
+                numbers.sort((a, b) => b.length - a.length);
                 console.log("추출된 숫자:", numbers[0]);
                 return numbers[0];
             };
 
             try {
-                console.log("1차 인식 시도 (원본 방향)");
+                console.log("OCR 인식 시도 (OSD 모드)");
                 let result = await worker.recognize(canvas);
                 let mileage = parseText(result.data.text);
-                if (mileage) return mileage;
-
-                console.log("1차 실패. 2차 인식 시도 (90도 회전)");
-                const rotatedCanvas = document.createElement('canvas');
-                const rCtx = rotatedCanvas.getContext('2d');
-                rotatedCanvas.width = canvas.height;
-                rotatedCanvas.height = canvas.width;
-                rCtx.rotate(-Math.PI / 2);
-                rCtx.drawImage(canvas, -canvas.width, 0);
-
-                result = await worker.recognize(rotatedCanvas);
-                mileage = parseText(result.data.text);
+                // OSD가 방향을 자동 감지하므로 수동 90도 회전 로직 제거
                 return mileage;
-
             } catch (error) { 
                 console.error("OCR 처리 중 오류:", error); 
                 return null; 
@@ -991,6 +1019,16 @@ thumbnail.src = compressedImageDataUrl;
                     const response = await fetch(url, {
                         headers: { 'Authorization': `KakaoAK ${KAKAO_API_KEY}` }
                     });
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        console.error(`Kakao API error: ${response.status} ${response.statusText}`, errorBody);
+                        if (response.status === 401 || response.status === 400) {
+                            return "주소 조회 실패 (API 키를 확인하세요)";
+                        }
+                        return `주소 조회 실패 (오류: ${response.status})`;
+                    }
+
                     const data = await response.json();
 
                     if (data.documents && data.documents.length > 0) {
@@ -1063,8 +1101,44 @@ thumbnail.src = compressedImageDataUrl;
             }
         }
 
+        function checkForUpdates() {
+            const versionSpan = document.querySelector('h1 span');
+            if (!versionSpan) return;
+
+            const currentVersion = versionSpan.textContent.replace('ver_', '');
+
+            // 캐시를 우회하기 위해 타임스탬프를 쿼리 파라미터로 추가합니다.
+            fetch(`version.json?v=${new Date().getTime()}`)
+                .then(response => {
+                    if (!response.ok) {
+                        // version.json 파일이 없는 경우 조용히 실패 처리
+                        if (response.status === 404) return null;
+                        throw new Error('version.json 파일을 가져오는 중 오류 발생');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data) return; // 파일이 없으면 중단
+                    const latestVersion = data.version;
+                    console.log(`현재 버전: ${currentVersion}, 최신 버전: ${latestVersion}`);
+                    if (latestVersion > currentVersion) {
+                        if (confirm(`새로운 버전(${latestVersion})이 있습니다. 지금 업데이트하시겠습니까?`)) {
+                            location.reload(true); // 캐시를 무시하고 서버에서 새로고침
+                        }
+                    }
+                })
+                .catch(error => console.error('업데이트 확인 중 오류 발생:', error));
+        }
+
         loadTableData();
         updateRowNumbers();
+
+        // 페이지 로드 후 잠시 뒤에 업데이트 확인 시작
+        setTimeout(() => {
+            checkForUpdates();
+            // 그 후 30분마다 주기적으로 업데이트 확인
+            setInterval(checkForUpdates, 1000 * 60 * 30);
+        }, 3000);
     });
     </script>
 </body>
