@@ -369,6 +369,10 @@
                 modal.style.display = 'block';
                 modalImage.src = target.src;
             } else if (target.classList.contains('save-row-btn')) {
+                // 저장 전 주행거리 유효성 검사
+                if (!validateMileageForSave(row)) {
+                    return; // 유효성 검사 실패 시 저장 중단
+                }
                 // 주행거리 유효성을 검사하고, 완료 조건을 충족하면 행을 접도록 시도합니다.
                 updateDistance(row);
                 // updateDistance 내부에서 저장될 수도 있지만, 다른 필드 변경사항을 보장하기 위해 한 번 더 호출합니다.
