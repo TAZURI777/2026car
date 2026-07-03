@@ -100,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260703</span></h1>
+        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260703_1</span></h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
             <div class="spinner"></div>
@@ -563,14 +563,19 @@ thumbnail.src = compressedImageDataUrl;
             const year = dateToUse.getFullYear(), month = dateToUse.getMonth() + 1, day = dateToUse.getDate();
             const displayDate = `${month}/${day}`, fullDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const formattedTime = `${String(dateToUse.getHours()).padStart(2, '0')}:${String(dateToUse.getMinutes()).padStart(2, '0')}`;
+            const fullTimestamp = dateToUse.toISOString();
             
             if (type === 'start') {
                 const runDateCell = row.querySelector('.run-date');
                 runDateCell.textContent = displayDate;
                 runDateCell.dataset.fullDate = fullDate;
-                row.querySelector('.start-time').textContent = formattedTime;
+                const startTimeCell = row.querySelector('.start-time');
+                startTimeCell.textContent = formattedTime;
+                startTimeCell.dataset.fullTimestamp = fullTimestamp;
             } else {
-                row.querySelector('.end-time').textContent = formattedTime;
+                const endTimeCell = row.querySelector('.end-time');
+                endTimeCell.textContent = formattedTime;
+                endTimeCell.dataset.fullTimestamp = fullTimestamp;
             }
             if (exifData && exifData.gpsLatitude && exifData.gpsLongitude) {
                 const address = await getAddressFromCoordinates(exifData.gpsLatitude, exifData.gpsLongitude);
@@ -654,8 +659,8 @@ thumbnail.src = compressedImageDataUrl;
                 <td class="run-date editable-cell" contenteditable="true" data-label="운행 일자" data-full-date="${rowData.fullDate || ''}">${rowData.displayDate || ''}</td>
                 <td class="start-location editable-cell" contenteditable="true" data-label="출발지">${rowData.startLocation || ''}</td>
                 <td class="end-location editable-cell" contenteditable="true" data-label="도착지">${rowData.endLocation || ''}</td>
-                <td class="start-time editable-cell" contenteditable="true" data-label="출발시간(H)">${rowData.startTime || ''}</td>
-                <td class="end-time editable-cell" contenteditable="true" data-label="도착시간(H)">${rowData.endTime || ''}</td>
+                <td class="start-time editable-cell" contenteditable="true" data-label="출발시간(H)" data-full-timestamp="${rowData.startTimestamp || ''}">${rowData.startTime || ''}</td>
+                <td class="end-time editable-cell" contenteditable="true" data-label="도착시간(H)" data-full-timestamp="${rowData.endTimestamp || ''}">${rowData.endTime || ''}</td>
                 <td class="mileage start-mileage" contenteditable="true" data-label="출발(km)">${rowData.startMileage || ''}</td>
                 <td class="mileage end-mileage" contenteditable="true" data-label="도착(km)">${rowData.endMileage || ''}</td>
                 <td class="distance" data-label="주행거리(km)">${rowData.distance || ''}</td>
@@ -757,7 +762,9 @@ thumbnail.src = compressedImageDataUrl;
                         startLocation: row.querySelector('.start-location').textContent,
                         endLocation: row.querySelector('.end-location').textContent,
                         startTime: row.querySelector('.start-time').textContent,
+                        startTimestamp: row.querySelector('.start-time').dataset.fullTimestamp,
                         endTime: row.querySelector('.end-time').textContent,
+                        endTimestamp: row.querySelector('.end-time').dataset.fullTimestamp,
                         startMileage: row.querySelector('.start-mileage').textContent,
                         endMileage: row.querySelector('.end-mileage').textContent,
                         distance: row.querySelector('.distance').textContent,
@@ -812,14 +819,33 @@ thumbnail.src = compressedImageDataUrl;
                     
                     // 파일명으로 사용할 정보 추출 및 정제
                     const sanitize = (str) => (str || '').replace(/[\s\\/:"*?<>|]+/g, '_').replace(/__/g, '_');
-                    const date = runDateCell.dataset.fullDate || '날짜없음';
-                    const startLoc = row.querySelector('.start-location').textContent || '출발지없음';
-                    const endLoc = row.querySelector('.end-location').textContent || '도착지없음';
-                    const baseFilename = `${date}_${sanitize(startLoc)}-${sanitize(endLoc)}`;
+                    const startLoc = sanitize(row.querySelector('.start-location').textContent || '출발지없음');
+                    const endLoc = sanitize(row.querySelector('.end-location').textContent || '도착지없음');
                     
                     let startImageName = '';
                     if (startPhotoCell.dataset.imageDataUrl && startPhotoCell.dataset.imageDataUrl !== 'null' && startPhotoCell.dataset.imageDataUrl.startsWith('data:image')) {
-                        const filename = `${baseFilename}_start.jpg`;
+                        const startTimeCell = row.querySelector('.start-time');
+                        const timestamp = startTimeCell.dataset.fullTimestamp;
+                        let dateStr;
+
+                        if (timestamp) {
+                            const d = new Date(timestamp);
+                            const y = String(d.getFullYear()).slice(2);
+                            const m = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            const h = String(d.getHours()).padStart(2, '0');
+                            const min = String(d.getMinutes()).padStart(2, '0');
+                            const s = String(d.getSeconds()).padStart(2, '0');
+                            // 요청 형식: YYMMDD_HH:MM:SS -> 파일명 안전하게 YYMMDD_HH_MM_SS
+                            dateStr = `${y}${m}${day}_${h}_${min}_${s}`;
+                        } else {
+                            // 타임스탬프가 없는 구 버전 데이터 호환용
+                            const datePart = (runDateCell.dataset.fullDate || '날짜없음').replace(/-/g, '').slice(2);
+                            const timePart = (startTimeCell.textContent || '시간없음').replace(/:/g, '_') + '_00';
+                            dateStr = `${datePart}_${timePart}`;
+                        }
+                        
+                        const filename = `${dateStr}_${startLoc}_start.jpg`;
                         startImageName = `images/${filename}`;
                         const base64Data = startPhotoCell.dataset.imageDataUrl.split(',')[1];
                         imgFolder.file(filename, base64Data, { base64: true });
@@ -827,7 +853,26 @@ thumbnail.src = compressedImageDataUrl;
 
                     let endImageName = '';
                     if (endPhotoCell.dataset.imageDataUrl && endPhotoCell.dataset.imageDataUrl !== 'null' && endPhotoCell.dataset.imageDataUrl.startsWith('data:image')) {
-                        const filename = `${baseFilename}_end.jpg`;
+                        const endTimeCell = row.querySelector('.end-time');
+                        const timestamp = endTimeCell.dataset.fullTimestamp;
+                        let dateStr;
+
+                        if (timestamp) {
+                            const d = new Date(timestamp);
+                            const y = String(d.getFullYear()).slice(2);
+                            const m = String(d.getMonth() + 1).padStart(2, '0');
+                            const day = String(d.getDate()).padStart(2, '0');
+                            const h = String(d.getHours()).padStart(2, '0');
+                            const min = String(d.getMinutes()).padStart(2, '0');
+                            const s = String(d.getSeconds()).padStart(2, '0');
+                            dateStr = `${y}${m}${day}_${h}_${min}_${s}`;
+                        } else {
+                            const datePart = (runDateCell.dataset.fullDate || '날짜없음').replace(/-/g, '').slice(2);
+                            const timePart = (endTimeCell.textContent || '시간없음').replace(/:/g, '_') + '_00';
+                            dateStr = `${datePart}_${timePart}`;
+                        }
+
+                        const filename = `${dateStr}_${endLoc}_end.jpg`;
                         endImageName = `images/${filename}`;
                         const base64Data = endPhotoCell.dataset.imageDataUrl.split(',')[1];
                         imgFolder.file(filename, base64Data, { base64: true });
