@@ -100,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260703_2</span></h1>
+        <h1>차량 운행일지 <span style="font-size: 0.6em; color: #888; vertical-align: middle;">ver_260703_4</span></h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
             <div class="spinner"></div>
@@ -591,6 +591,60 @@ thumbnail.src = compressedImageDataUrl;
             } else {
                 row.querySelector(`.${type}-location`).textContent = '위치 정보 없음';
             }
+        }
+
+        function validateMileageForSave(row) {
+            const startMileageCell = row.querySelector('.start-mileage');
+            const endMileageCell = row.querySelector('.end-mileage');
+
+            // Reset background color first
+            startMileageCell.style.backgroundColor = '';
+            endMileageCell.style.backgroundColor = '';
+
+            const startMileageText = startMileageCell.textContent.trim().replace(/,/g, '');
+            const endMileageText = endMileageCell.textContent.trim().replace(/,/g, '');
+
+            // 둘 다 비어있으면 저장 가능 (오류 아님)
+            if (startMileageText === '' && endMileageText === '') {
+                return true;
+            }
+
+            // 한쪽만 입력된 경우, 사용자에게 알리고 저장 중단
+            if (startMileageText !== '' && endMileageText === '') {
+                alert('도착(km)을 입력해야 주행거리를 올바르게 저장할 수 있습니다.');
+                endMileageCell.style.backgroundColor = '#ffdddd';
+                return false;
+            }
+            if (startMileageText === '' && endMileageText !== '') {
+                alert('출발(km)을 입력해야 주행거리를 올바르게 저장할 수 있습니다.');
+                startMileageCell.style.backgroundColor = '#ffdddd';
+                return false;
+            }
+
+            // 이 시점에서는 두 필드 모두 내용이 있음. 유효성 검사 수행.
+            const startMileage = parseFloat(startMileageText);
+            const endMileage = parseFloat(endMileageText);
+
+            if (isNaN(startMileage)) {
+                alert('출발(km)에 유효한 숫자를 입력해주세요.');
+                startMileageCell.style.backgroundColor = '#ffdddd';
+                return false;
+            }
+            if (isNaN(endMileage)) {
+                alert('도착(km)에 유효한 숫자를 입력해주세요.');
+                endMileageCell.style.backgroundColor = '#ffdddd';
+                return false;
+            }
+
+            if (endMileage < startMileage) {
+                alert('도착(km)의 주행거리는 출발(km)보다 크거나 같아야 합니다.');
+                startMileageCell.style.backgroundColor = '#ffdddd';
+                endMileageCell.style.backgroundColor = '#ffdddd';
+                return false;
+            }
+
+            // 모든 유효성 검사를 통과했습니다.
+            return true;
         }
 
         // 주행거리 유효성 검사 로직 추가
