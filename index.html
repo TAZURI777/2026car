@@ -37,7 +37,7 @@
             }
         }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 10px; }
-        .container { width: 100%; max-width: 1600px; background-color: var(--surface); padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); box-sizing: border-box; margin: 10px auto; }
+        .container { position: relative; width: 100%; max-width: 1600px; background-color: var(--surface); padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); box-sizing: border-box; margin: 10px auto; }
         h1 { text-align: center; color: var(--text); margin-bottom: 20px; font-size: 24px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
 
@@ -130,7 +130,7 @@
         #add-row-btn { background-color: var(--primary); }
         #download-excel { background-color: var(--success); }
         #backup-data-btn, #restore-data-btn { background-color: var(--gray); font-size: 15px; padding: 12px; }
-        .app-version { display: block; text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 15px; }
+        .app-version { position: absolute; top: 12px; right: 15px; color: var(--text-muted); font-size: 12px; }
 
         /* 토스트 알림 */
         #toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 90%; max-width: 420px; pointer-events: none; }
@@ -142,10 +142,23 @@
 
         /* API 키 입력 모달 */
         #api-key-input { display: block; width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; background-color: var(--bg); color: var(--text); }
+
+        /* 첫 사용 온보딩 가이드 */
+        .guide-modal-box { background-color: var(--surface); padding: 20px; border-radius: 12px; max-width: 420px; width: 92%; max-height: 85vh; overflow-y: auto; position: relative; box-sizing: border-box; }
+        .guide-skip-btn { position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--border); border-radius: 20px; color: var(--text-muted); font-size: 13px; padding: 8px 14px; cursor: pointer; }
+        .guide-step { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; text-align: left; }
+        .guide-icon { font-size: 26px; flex-shrink: 0; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background-color: var(--bg); border-radius: 12px; }
+        .guide-step b { display: block; margin-bottom: 2px; font-size: 15px; }
+        .guide-step p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+        .guide-os-label { display: inline-block; background-color: var(--primary); color: #fff; font-size: 12px; font-weight: bold; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px; }
+        .warning-box { background-color: rgba(255, 193, 7, 0.15); border: 1px solid var(--warning); border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; line-height: 1.6; margin: 10px 0; color: var(--text); }
+        .warning-box b { color: #b45309; }
+        @media (prefers-color-scheme: dark) { .warning-box b { color: #ffd54f; } }
     </style>
 </head>
 <body>
     <div class="container">
+        <span class="app-version" id="app-version"></span>
         <h1>차량 운행일지</h1>
         <div class="loader" id="loader">
             <p id="loader-text">처리 중입니다...</p>
@@ -170,7 +183,6 @@
             <button id="restore-data-btn" class="main-btn">📂 데이터 복원</button>
             <input type="file" id="restore-file-input" accept=".json,application/json">
         </div>
-        <span class="app-version" id="app-version"></span>
     </div>
 
     <div id="toast-container"></div>
@@ -212,9 +224,32 @@
         </div>
     </div>
 
+    <div id="onboarding-modal" class="modal">
+        <div class="modal-content guide-modal-box">
+            <button id="onboarding-skip-btn" class="guide-skip-btn">건너뛰기 ✕</button>
+            <h2 style="margin-top: 0; margin-bottom: 6px;">🚗 처음 오셨나요?</h2>
+            <span class="guide-os-label" id="onboarding-os-label"></span>
+            <div id="onboarding-steps"></div>
+            <button id="onboarding-start-btn" class="main-btn" style="background-color: var(--primary); margin-top: 6px;">확인했어요, 시작하기</button>
+        </div>
+    </div>
+
+    <div id="ios-warning-modal" class="modal">
+        <div class="modal-content guide-modal-box">
+            <h2 style="margin-top: 0;">⚠️ 아이폰 사용자 안내</h2>
+            <div class="warning-box">
+                아이폰(Safari)은 이 사이트를 <b>7일 이상 방문하지 않으면</b> 브라우저가 저장된 운행 기록과 사진을 <b>자동으로 삭제</b>할 수 있습니다.<br><br>
+                ✅ <b>홈 화면에 추가</b>해서 사용하면 이 제한이 없어집니다.<br>
+                (Safari 하단 <b>공유 버튼 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M12 3v12M8 7l4-4 4 4M5 12v8h14v-8"/></svg></b> → <b>'홈 화면에 추가'</b>)<br><br>
+                ✅ 중요한 기록은 <b>'💾 데이터 백업(JSON)'</b> 버튼으로 주기적으로 파일 보관하는 것이 안전합니다.
+            </div>
+            <button id="ios-warning-ok-btn" class="main-btn" style="background-color: var(--primary);">확인했어요</button>
+        </div>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const APP_VERSION = '260707_1';
+        const APP_VERSION = '260707_2';
         document.getElementById('app-version').textContent = `ver_${APP_VERSION}`;
 
         // 오프라인 사용을 위한 서비스 워커 등록 (http/https 환경에서만 동작)
@@ -1576,6 +1611,71 @@
                     }
                 })
                 .catch(error => console.error('업데이트 확인 중 오류 발생:', error));
+        }
+
+        // ===== 첫 사용 온보딩 가이드 + 아이폰 데이터 유실 경고 =====
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+        function buildOnboardingSteps() {
+            const commonSteps = [
+                { icon: '📸', title: '1. 출발 전 계기판 촬영', desc: "'📸 출발' 버튼을 눌러 계기판을 촬영하세요. 사진에서 날짜·시간·출발지 주소가 자동으로 입력됩니다." },
+                { icon: '✂️', title: '2. 주행거리 영역 선택', desc: '촬영한 사진에서 주행거리 숫자 부분만 드래그해서 선택하면 숫자를 자동으로 인식합니다. 인식이 안 되면 직접 입력하면 됩니다.' },
+                { icon: '🏁', title: '3. 도착 후 다시 촬영', desc: "도착지에서 '📸 도착' 버튼으로 촬영하면 도착 정보가 입력되고 주행거리가 자동 계산됩니다." },
+                { icon: '💾', title: '4. 저장하고 백업하기', desc: "'저장' 버튼으로 기록을 저장하세요. 중요한 기록은 '💾 데이터 백업(JSON)' 버튼으로 파일을 주기적으로 보관하는 것이 안전합니다." },
+                { icon: '📊', title: '5. 엑셀로 내려받기', desc: "'엑셀 다운로드' 버튼을 누르면 기록과 사진이 함께 담긴 ZIP 파일을 받을 수 있습니다." }
+            ];
+            const iosInstallStep = {
+                icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 7l4-4 4 4M5 12v8h14v-8"/></svg>',
+                title: '6. 홈 화면에 추가 (중요!)',
+                desc: "Safari 하단 가운데의 공유 버튼(네모에 화살표 ↑)을 누르고 '홈 화면에 추가'를 선택하세요. 앱처럼 아이콘으로 실행할 수 있고, 저장 데이터가 삭제되는 것을 막을 수 있습니다."
+            };
+            const androidInstallStep = {
+                icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+                title: '6. 홈 화면에 추가',
+                desc: "Chrome 오른쪽 위 점 3개(⋮) 메뉴를 누르고 '홈 화면에 추가' 또는 '앱 설치'를 선택하면 앱처럼 아이콘으로 바로 실행할 수 있습니다."
+            };
+
+            const steps = [...commonSteps, isIOS ? iosInstallStep : androidInstallStep];
+            let html = steps.map(s => `
+                <div class="guide-step">
+                    <div class="guide-icon">${s.icon}</div>
+                    <div><b>${s.title}</b><p>${s.desc}</p></div>
+                </div>`).join('');
+
+            if (isIOS) {
+                html += `<div class="warning-box">⚠️ <b>아이폰 주의사항</b><br>
+                    Safari는 이 사이트를 <b>7일 이상 방문하지 않으면</b> 저장된 운행 기록과 사진을 <b>자동으로 삭제</b>할 수 있습니다.
+                    <b>홈 화면에 추가</b>해서 사용하면 이 제한이 없어지며, 중요한 기록은 <b>데이터 백업(JSON)</b> 버튼으로 보관하세요.</div>`;
+            }
+            document.getElementById('onboarding-os-label').textContent = isIOS ? '🍎 아이폰(iOS) 사용 안내' : '🤖 안드로이드 사용 안내';
+            document.getElementById('onboarding-steps').innerHTML = html;
+        }
+
+        function dismissOnboarding() {
+            document.getElementById('onboarding-modal').style.display = 'none';
+            localStorage.setItem('onboardingSeen', 'true');
+            // 온보딩에서 이미 아이폰 경고를 봤으므로 별도 경고는 7일 뒤부터
+            localStorage.setItem('iosWarningLastShown', String(Date.now()));
+        }
+        document.getElementById('onboarding-skip-btn').addEventListener('click', dismissOnboarding);
+        document.getElementById('onboarding-start-btn').addEventListener('click', dismissOnboarding);
+        document.getElementById('ios-warning-ok-btn').addEventListener('click', () => {
+            document.getElementById('ios-warning-modal').style.display = 'none';
+            localStorage.setItem('iosWarningLastShown', String(Date.now()));
+        });
+
+        const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+        if (!localStorage.getItem('onboardingSeen')) {
+            // 최초 실행: OS에 맞는 사용 가이드 표시
+            buildOnboardingSteps();
+            document.getElementById('onboarding-modal').style.display = 'flex';
+        } else if (isIOS && !isStandalone) {
+            // 아이폰 + 홈 화면 미설치 사용자에게 7일마다 데이터 유실 경고
+            const lastShown = Number(localStorage.getItem('iosWarningLastShown')) || 0;
+            if (Date.now() - lastShown > SEVEN_DAYS) {
+                document.getElementById('ios-warning-modal').style.display = 'flex';
+            }
         }
 
         loadTableData().then(() => updateRowNumbers());
