@@ -249,7 +249,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const APP_VERSION = '260707_2';
+        const APP_VERSION = '260714';
         document.getElementById('app-version').textContent = `ver_${APP_VERSION}`;
 
         // 오프라인 사용을 위한 서비스 워커 등록 (http/https 환경에서만 동작)
@@ -774,12 +774,36 @@
                 endTimeCell.textContent = formattedTime;
                 endTimeCell.dataset.fullTimestamp = fullTimestamp;
             }
-            if (exifData && exifData.gpsLatitude && exifData.gpsLongitude) {
-                const address = await getAddressFromCoordinates(exifData.gpsLatitude, exifData.gpsLongitude);
+            let gpsLat = (exifData && exifData.gpsLatitude) ? exifData.gpsLatitude : null;
+            let gpsLon = (exifData && exifData.gpsLongitude) ? exifData.gpsLongitude : null;
+            // 안드로이드 사진 선택기(갤러리)는 보안상 사진의 위치 EXIF를 제거해서 전달하므로,
+            // GPS 정보가 없으면 현재 기기 위치로 대체하여 주소를 조회한다.
+            if (gpsLat === null || gpsLon === null) {
+                const pos = await getCurrentPositionSafe();
+                if (pos) {
+                    gpsLat = pos.lat;
+                    gpsLon = pos.lon;
+                    showToast('사진에 위치 정보가 없어 현재 위치로 주소를 입력합니다.', { duration: 4000 });
+                }
+            }
+            if (gpsLat !== null && gpsLon !== null) {
+                const address = await getAddressFromCoordinates(gpsLat, gpsLon);
                 row.querySelector(`.${type}-location`).textContent = address;
             } else {
                 row.querySelector(`.${type}-location`).textContent = '위치 정보 없음';
             }
+        }
+
+        // 현재 기기 위치를 조회 (실패/거부/미지원 시 null)
+        function getCurrentPositionSafe() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) { resolve(null); return; }
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+                    (err) => { console.warn('현재 위치 조회 실패:', err); resolve(null); },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                );
+            });
         }
 
         function validateMileageForSave(row) {
@@ -902,11 +926,11 @@
             const startInputId = `start-photo-${uniqueId}`;
             const endInputId = `end-photo-${uniqueId}`;
 
-            // capture 속성을 제거하여 카메라 촬영과 갤러리 선택을 모두 허용
+            // 📸 버튼은 capture 속성으로 카메라 직행, 🖼 버튼은 갤러리 선택용
             newRow.innerHTML = `
                 <td class="row-number" data-label="No."><span></span><button class="toggle-btn" style="display: ${toggleBtnDisplay};">${toggleBtnText}</button></td>
-                <td data-label="출발촬영"><label for="${startInputId}" class="custom-file-upload">📸 출발</label><input id="${startInputId}" class="photo-input" data-type="start" type="file" accept="image/*"></td>
-                <td data-label="도착촬영"><label for="${endInputId}" class="custom-file-upload">📸 도착</label><input id="${endInputId}" class="photo-input" data-type="end" type="file" accept="image/*"></td>
+                <td data-label="출발촬영"><label for="${startInputId}" class="custom-file-upload">📸 출발</label><input id="${startInputId}" class="photo-input" data-type="start" type="file" accept="image/*" capture="environment"><label for="${startInputId}-gallery" class="custom-file-upload">🖼</label><input id="${startInputId}-gallery" class="photo-input" data-type="start" type="file" accept="image/*"></td>
+                <td data-label="도착촬영"><label for="${endInputId}" class="custom-file-upload">📸 도착</label><input id="${endInputId}" class="photo-input" data-type="end" type="file" accept="image/*" capture="environment"><label for="${endInputId}-gallery" class="custom-file-upload">🖼</label><input id="${endInputId}-gallery" class="photo-input" data-type="end" type="file" accept="image/*"></td>
                 <td class="run-date editable-cell" contenteditable="true" data-label="운행 일자" data-full-date="${esc(rowData.fullDate)}">${esc(rowData.displayDate)}</td>
                 <td class="start-location editable-cell" contenteditable="true" data-label="출발지">${esc(rowData.startLocation)}</td>
                 <td class="end-location editable-cell" contenteditable="true" data-label="도착지">${esc(rowData.endLocation)}</td>
@@ -1285,7 +1309,7 @@
         function getExifData(file) {
             return new Promise((resolve) => {
                 let resolved = false;
-                const timeoutId = setTimeout(() => { if (!resolved) { console.warn("EXIF 읽기 시간 초과"); resolved = true; resolve(null); } }, 2000);
+                const timeoutId = setTimeout(() => { if (!resolved) { console.warn("EXIF 읽기 시간 초과"); resolved = true; resolve(null); } }, 10000);
                 try {
                     EXIF.getData(file, function() {
                         if (resolved) return;
@@ -1619,7 +1643,8 @@
 
         function buildOnboardingSteps() {
             const commonSteps = [
-                { icon: '📸', title: '1. 출발 전 계기판 촬영', desc: "'📸 출발' 버튼을 눌러 계기판을 촬영하세요. 사진에서 날짜·시간·출발지 주소가 자동으로 입력됩니다." },
+                { icon: '📸', title: '1. 출발 전 계기판 촬영', desc: "'📸 출발' 버튼을 누르면 바로 카메라가 열려 계기판을 촬영할 수 있습니다. 사진에서 날짜·시간·출발지 주소가 자동으로 입력됩니다. 갤러리의 사진을 사용하려면 옆의 '🖼' 버튼을 누르세요." },
+                { icon: '📍', title: '1-1. 위치 권한 허용', desc: "갤러리에서 고른 사진은 위치 정보가 제거되어 전달될 수 있습니다. 이 경우 현재 위치로 주소를 입력하므로, 브라우저의 위치 권한 요청이 뜨면 '허용'을 눌러주세요." },
                 { icon: '✂️', title: '2. 주행거리 영역 선택', desc: '촬영한 사진에서 주행거리 숫자 부분만 드래그해서 선택하면 숫자를 자동으로 인식합니다. 인식이 안 되면 직접 입력하면 됩니다.' },
                 { icon: '🏁', title: '3. 도착 후 다시 촬영', desc: "도착지에서 '📸 도착' 버튼으로 촬영하면 도착 정보가 입력되고 주행거리가 자동 계산됩니다." },
                 { icon: '💾', title: '4. 저장하고 백업하기', desc: "'저장' 버튼으로 기록을 저장하세요. 중요한 기록은 '💾 데이터 백업(JSON)' 버튼으로 파일을 주기적으로 보관하는 것이 안전합니다." },
