@@ -1,5 +1,5 @@
 // 차량 운행일지 서비스 워커 — 오프라인 사용 지원
-const CACHE_NAME = 'driving-log-v260707_2';
+const CACHE_NAME = 'driving-log-v260714';
 const APP_SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
