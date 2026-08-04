@@ -1,5 +1,5 @@
 // 차량 운행일지 서비스 워커 — 오프라인 사용 지원
-const CACHE_NAME = 'driving-log-v260804_3';
+const CACHE_NAME = 'driving-log-v260804_4';
 // 이 두 개는 없으면 앱이 실행되지 않으므로 설치 시 반드시 캐시한다.
 const CORE_SHELL = ['./', './index.html'];
 // 없어도 앱은 뜨므로, 실패해도 설치를 중단시키지 않는다.
